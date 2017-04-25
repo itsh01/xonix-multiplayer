@@ -7,6 +7,11 @@ const now = () => (new Date).getTime()
 let fps = 1
 let lastFrame = now()
 
+const normalizePosition = ({x, y}, {width, height}) => ({
+    x: Math.floor(x / 100 * width),
+    y: Math.floor(y / 100 * height)
+})
+
 const renderRect = (ctx, rect, color) => {
     ctx.fillStyle = color
     ctx.fillRect(rect.x, rect.y, rect.width, rect.height)
@@ -17,54 +22,67 @@ const renderText = (ctx, txt, pos) => {
     ctx.fillText(txt, pos.x, pos.y)
 }
 
+const renderPosition = (ctx, {x, y}, color) => {
+    renderRect(ctx, {
+        x: x - 10, y: y - 10,
+        width: 20, height: 20,
+    }, color)
+    renderRect(ctx, {
+        x: x - 5, y: y - 5,
+        width: 10, height: 10,
+    }, '#fff')
+}
+
+const renderPath = (ctx, {x, y}, path, layout, color) => {
+    path.forEach((p, i) => {
+    const p1 = normalizePosition(p, layout)
+    const p2 = (i !== path.length - 1) ? normalizePosition(path[i + 1], layout): {x, y}
+
+    if (p1.x === p2.x) {
+        const yMin = Math.min(p1.y, p2.y)
+        renderRect(ctx, {
+            x: p1.x - 1, y: yMin,
+            width: 3, height: Math.max(p1.y, p2.y) - yMin
+        }, color)
+    } else {
+        const xMin = Math.min(p1.x, p2.x)
+        renderRect(ctx, {
+            y: p1.y - 1, x: xMin,
+            height: 3, width: Math.max(p1.x, p2.x) - xMin
+        }, color)
+    }
+
+    })
+}
+
+const renderArea = (ctx, area, layout, color) => {
+    if (!area.length) return
+
+    const {x, y} = normalizePosition(area[0], layout)
+    ctx.fillStyle = color
+    ctx.beginPath()
+    ctx.moveTo(x, y)
+
+    area.forEach(p => {
+        const {x, y} = normalizePosition(p, layout)
+        ctx.lineTo(x, y)
+    })
+
+    ctx.closePath()
+    ctx.fill()
+}
+
 const render = (layout, ctx, state) => {
     renderRect(ctx, layout, '#000')
 
     const ids = Object.keys(state)
     ids.forEach(id => {
-        const {pos, color, path} = state[id]
-        const x = Math.floor(pos.x / 100 * layout.width)
-        const y = Math.floor(pos.y / 100 * layout.height)
-        // const {x, y} = pos
-        // console.log(x,y)
-        if (path) {
-            path.forEach((p, i) => {
-            const p1 = {
-                x: Math.floor(p.x / 100 * layout.width),
-                y: Math.floor(p.y / 100 * layout.height)
-            }
-            const p2 = (i !== path.length - 1) ? {
-                x: Math.floor(path[i + 1].x / 100 * layout.width),
-                y: Math.floor(path[i + 1].y / 100 * layout.height)
-            } : {x, y}
+        const {pos, color, path, area} = state[id]
+        const {x, y} = normalizePosition(pos, layout)
 
-            if (p1.x === p2.x) {
-                const yMin = Math.min(p1.y, p2.y)
-                renderRect(ctx, {
-                    x: p1.x - 1, y: yMin,
-                    width: 3, height: Math.max(p1.y, p2.y) - yMin
-                }, color)
-            } else {
-                const xMin = Math.min(p1.x, p2.x)
-                renderRect(ctx, {
-                    y: p1.y - 1, x: xMin,
-                    height: 3, width: Math.max(p1.x, p2.x) - xMin
-                }, color)
-            }
-
-            })
-        }
-
-        if (pos) {
-            renderRect(ctx, {
-                x: x - 10, y: y - 10,
-                width: 20, height: 20,
-            }, color)
-            renderRect(ctx, {
-                x: x - 5, y: y - 5,
-                width: 10, height: 10,
-            }, '#fff')
-        }
+        if (area) renderArea(ctx, area, layout, color)
+        if (path) renderPath(ctx, {x, y}, path, layout, color)
+        if (pos) renderPosition(ctx, {x, y}, color)
 
     })
     renderText(ctx, fps, {x: layout.width - 25, y: 15})

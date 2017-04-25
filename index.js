@@ -22,16 +22,22 @@ const randomColor = () => '#' + [0,0,0]
     .join('')
 
 const randomPercent = () => Math.floor(Math.random() * 100)
-const generateNewClientState = () => ({
-    pos: {
-        x: randomPercent(),
-        y: randomPercent()
-    },
-    speed: {x: 0, y: 0},
-    area: [],
-    path: [],
-    color: randomColor()
-})
+const generateNewClientState = () => {
+    x = randomPercent()
+    y = randomPercent()
+    return {
+        pos: {x, y},
+        speed: {x: 0, y: 0},
+        area: [
+            {x, y},
+            {x: x - 5, y},
+            {x: x - 5, y: y + 5},
+            {x: x, y: y + 5}
+        ],
+        path: [],
+        color: randomColor()
+    }
+}
 
 const KEYS = {
     37: 'LEFT',
@@ -68,6 +74,23 @@ const addClient = socket => {
 
 io.sockets.on('connection', addClient)
 
+const findHit = (client) => {
+    const {x, y} = client.pos
+    const possibleHits = client.area.reduce((acc, p, i) => {
+        return (i < client.area.length - 1 && (
+            (p.x === x && client.area[i + 1].x === p.x) ||
+            (p.y === y && client.area[i + 1].y === p.y)
+        )) ? acc.concat({p, i}) : acc
+    }, [])
+
+    return possibleHits.find(({p, i}) =>
+        (p.x < x && x < client.area[i + 1].x) ||
+        (p.x > x && x > client.area[i + 1].x) ||
+        (p.y < y && y < client.area[i + 1].y) ||
+        (p.y > y && y > client.area[i + 1].y)
+    )
+}
+
 const withinLimits = (v, min, max) => Math.max(Math.min(v, max), min)
 const gameTick = () => {
     const ids = Object.keys(clients)
@@ -78,7 +101,22 @@ const gameTick = () => {
                 x: withinLimits(pos.x + speed.x, 0 ,100),
                 y: withinLimits(pos.y + speed.y, 0, 100)
             }
+
+            if (clients[id].area && clients[id].path && (speed.x || speed.y)) {
+                const hit = findHit(clients[id])
+
+                if (hit) {
+                    const pathStart = findHit(Object.assign({}, clients[id], {pos: clients[id].path[0]}))
+                    clients[id].area = clients[id].area.slice(0, pathStart)
+                        .concat(clients[id].path)
+                        .concat(clients[id].pos)
+                        .concat(clients[id].area.slice(pathStart + 1))
+                    clients[id].path = []
+                    clients[id].speed = {x: 0, y: 0}
+                }
+            }
         }
+
     })
 }
 
